@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileUpload } from './FileUpload';
+import { PrivacyModeToggle } from './PrivacyModeToggle';
 import { useApp } from '@/context/AppContext';
 import { apiService } from '@/services/apiService';
 import keystoneLogo from '@/media/keystone.png';
@@ -10,7 +11,7 @@ import keystoneLogo from '@/media/keystone.png';
  */
 export function HomePage() {
   const navigate = useNavigate();
-  const { setCurrentDocumentId, setCurrentGraphData, isOnline } = useApp();
+  const { setCurrentDocumentId, setCurrentGraphData, isOnline, isPrivacyMode } = useApp();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,6 +19,11 @@ export function HomePage() {
   React.useEffect(() => {
     apiService.setOnlineMode(isOnline);
   }, [isOnline]);
+
+  // Update API service privacy mode
+  React.useEffect(() => {
+    apiService.setPrivacyMode(isPrivacyMode);
+  }, [isPrivacyMode]);
 
   const handleFileSelect = async (file: File) => {
     setIsLoading(true);
@@ -62,22 +68,30 @@ export function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-keystone-primary flex items-center px-8 py-12">
-      <div className="max-w-6xl mx-auto w-full">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left Side - Logo/Title */}
-          <div className="text-center lg:text-left animate-fade-in">
-            <img src={keystoneLogo} alt="Keystone" className="max-w-full h-auto" />
-          </div>
+    <div className="min-h-screen bg-keystone-primary flex flex-col">
+      {/* Privacy Mode Toggle at top */}
+      <div className="p-4 flex justify-end">
+        <PrivacyModeToggle />
+      </div>
+      
+      {/* Main content */}
+      <div className="flex-1 flex items-center px-8 py-12">
+        <div className="max-w-6xl mx-auto w-full">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            {/* Left Side - Logo/Title */}
+            <div className="text-center lg:text-left animate-fade-in">
+              <img src={keystoneLogo} alt="Keystone" className="max-w-full h-auto" />
+            </div>
 
-          {/* Right Side - Upload Options */}
-          <div className="animate-slide-up">
-            <FileUpload
-              onFileSelect={handleFileSelect}
-              onUrlSubmit={handleUrlSubmit}
-              isLoading={isLoading}
-              error={error}
-            />
+            {/* Right Side - Upload Options */}
+            <div className="animate-slide-up">
+              <FileUpload
+                onFileSelect={handleFileSelect}
+                onUrlSubmit={handleUrlSubmit}
+                isLoading={isLoading}
+                error={error}
+              />
+            </div>
           </div>
         </div>
       </div>

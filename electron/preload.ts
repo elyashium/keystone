@@ -17,6 +17,11 @@ const electronAPI = {
   // File dialog
   selectFile: () => ipcRenderer.invoke('dialog:selectFile'),
   
+  // Local backend
+  getLocalBackendUrl: () => ipcRenderer.invoke('backend:getLocalUrl'),
+  initializeLocalBackend: () => ipcRenderer.invoke('backend:initialize'),
+  checkBackendHealth: () => ipcRenderer.invoke('backend:health'),
+  
   // Platform info
   platform: process.platform,
 };

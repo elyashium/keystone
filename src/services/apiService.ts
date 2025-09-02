@@ -6,7 +6,9 @@ import type { GraphData, ProcessDocumentResponse, AskQuestionResponse } from '@/
  */
 class ApiService {
   private isOnline: boolean = false;
+  private isPrivacyMode: boolean = false;
   private baseUrl: string = this.getBaseUrl();
+  private localBackendUrl: string | null = null;
 
   private getBaseUrl(): string {
     // Check if running in Electron
@@ -32,11 +34,55 @@ class ApiService {
   }
 
   /**
+   * Set privacy mode (local processing)
+   */
+  async setPrivacyMode(enabled: boolean): Promise<void> {
+    this.isPrivacyMode = enabled;
+    
+    if (enabled && !this.localBackendUrl) {
+      // Get local backend URL from Electron
+      if (typeof window !== 'undefined' && window.electronAPI) {
+        this.localBackendUrl = await window.electronAPI.getLocalBackendUrl();
+        console.log('Local backend URL:', this.localBackendUrl);
+      }
+    }
+  }
+
+  /**
+   * Get current privacy mode status
+   */
+  isPrivacyModeEnabled(): boolean {
+    return this.isPrivacyMode;
+  }
+
+  /**
+   * Initialize local backend services
+   */
+  async initializeLocalBackend(): Promise<{ success: boolean; error?: string }> {
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      return await window.electronAPI.initializeLocalBackend();
+    }
+    return { success: false, error: 'Electron API not available' };
+  }
+
+  /**
+   * Check local backend health
+   */
+  async checkLocalBackendHealth(): Promise<any> {
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      return await window.electronAPI.checkBackendHealth();
+    }
+    return { status: 'error', error: 'Electron API not available' };
+  }
+
+  /**
    * Process a document (PDF file or YouTube URL)
    */
   async processDocument(source: File | string): Promise<ProcessDocumentResponse> {
     try {
-      if (this.isOnline) {
+      if (this.isPrivacyMode) {
+        return this.processDocumentLocal(source);
+      } else if (this.isOnline) {
         return this.processDocumentOnline(source);
       } else {
         return this.processDocumentOffline(source);
@@ -52,7 +98,10 @@ class ApiService {
    */
   async fetchGraphData(documentId: string): Promise<GraphData> {
     try {
-      if (this.isOnline) {
+      if (this.isPrivacyMode) {
+        // In privacy mode, graph data is returned with document processing
+        throw new Error('Graph data is included in the document processing response for privacy mode');
+      } else if (this.isOnline) {
         return this.fetchGraphDataOnline(documentId);
       } else {
         return this.fetchGraphDataOffline(documentId);
@@ -68,7 +117,9 @@ class ApiService {
    */
   async askQuestion(documentId: string, question: string): Promise<AskQuestionResponse> {
     try {
-      if (this.isOnline) {
+      if (this.isPrivacyMode) {
+        return this.askQuestionLocal(documentId, question);
+      } else if (this.isOnline) {
         return this.askQuestionOnline(documentId, question);
       } else {
         return this.askQuestionOffline(documentId, question);
@@ -84,7 +135,9 @@ class ApiService {
    */
   async getSummary(documentId: string, topic: string): Promise<{ summary: string }> {
     try {
-      if (this.isOnline) {
+      if (this.isPrivacyMode) {
+        return this.getSummaryLocal(documentId, topic);
+      } else if (this.isOnline) {
         return this.getSummaryOnline(documentId, topic);
       } else {
         throw new Error('Summary functionality not available in offline mode');
@@ -93,6 +146,96 @@ class ApiService {
       console.error('Summary generation error:', error);
       throw new Error('Failed to generate summary');
     }
+  }
+
+  // Private methods for local backend (Privacy Mode)
+
+  private async processDocumentLocal(source: File | string): Promise<ProcessDocumentResponse> {
+    if (!this.localBackendUrl) {
+      throw new Error('Local backend not available');
+    }
+
+    if (typeof source === 'string') {
+      throw new Error('YouTube processing not available in privacy mode');
+    }
+    
+    // File upload to local backend
+    const formData = new FormData();
+    formData.append('file', source);
+
+    const response = await fetch(`${this.localBackendUrl}/api/process-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Local backend error! status: ${response.status} - ${errorText}`);
+    }
+
+    const backendResponse = await response.json();
+    
+    // Transform backend response to match frontend expectations
+    return {
+      documentId: backendResponse.index_name || 'nerv',
+      title: source.name || 'Processed Document',
+      status: 'success' as const,
+      graphData: backendResponse.graph_data
+    };
+  }
+
+  private async askQuestionLocal(documentId: string, question: string): Promise<AskQuestionResponse> {
+    if (!this.localBackendUrl) {
+      throw new Error('Local backend not available');
+    }
+
+    const response = await fetch(`${this.localBackendUrl}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: documentId,
+        index_name: 'nerv',
+        user_message: question,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Local backend error! status: ${response.status} - ${errorText}`);
+    }
+
+    const backendResponse = await response.json();
+    
+    return {
+      answer: backendResponse.ai_response,
+      sources: []
+    };
+  }
+
+  private async getSummaryLocal(documentId: string, topic: string): Promise<{ summary: string }> {
+    if (!this.localBackendUrl) {
+      throw new Error('Local backend not available');
+    }
+
+    const response = await fetch(`${this.localBackendUrl}/api/get-summary`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        topic: topic,
+        index_name: 'nerv',
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Local backend error! status: ${response.status} - ${errorText}`);
+    }
+
+    return response.json();
   }
 
   // Private methods for offline mode (Electron IPC)

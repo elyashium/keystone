@@ -3,12 +3,14 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
 import { v4 as uuidv4 } from 'uuid';
+import { LocalBackend } from './services/LocalBackend';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Keep a global reference of the window object
 let mainWindow: BrowserWindow;
+let localBackend: LocalBackend;
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -50,9 +52,26 @@ function createWindow(): void {
 }
 
 // This method will be called when Electron has finished initialization
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  // Initialize local backend
+  localBackend = new LocalBackend();
+  
+  try {
+    await localBackend.start();
+    console.log(`Local backend started on port ${localBackend.getPort()}`);
+  } catch (error) {
+    console.error('Failed to start local backend:', error);
+  }
+  
+  createWindow();
+});
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+  // Clean up local backend
+  if (localBackend) {
+    await localBackend.cleanup();
+  }
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -162,4 +181,52 @@ ipcMain.handle('dialog:selectFile', async () => {
   }
   
   return result.filePaths[0];
+});
+
+/**
+ * Get local backend URL
+ */
+ipcMain.handle('backend:getLocalUrl', async () => {
+  if (localBackend) {
+    return `http://127.0.0.1:${localBackend.getPort()}`;
+  }
+  return null;
+});
+
+/**
+ * Initialize local AI services
+ */
+ipcMain.handle('backend:initialize', async () => {
+  if (localBackend) {
+    try {
+      await localBackend.initializeServices();
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : String(error) 
+      };
+    }
+  }
+  return { success: false, error: 'Local backend not available' };
+});
+
+/**
+ * Check local backend health
+ */
+ipcMain.handle('backend:health', async () => {
+  if (localBackend) {
+    try {
+      // Make a health check request to our own backend
+      const response = await fetch(`http://127.0.0.1:${localBackend.getPort()}/health`);
+      const health = await response.json();
+      return health;
+    } catch (error) {
+      return { 
+        status: 'error', 
+        error: error instanceof Error ? error.message : String(error) 
+      };
+    }
+  }
+  return { status: 'error', error: 'Local backend not available' };
 });

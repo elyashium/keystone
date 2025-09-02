@@ -4,6 +4,8 @@ import type { GraphData } from '@/types';
 interface AppContextType {
   isOnline: boolean;
   setIsOnline: (online: boolean) => void;
+  isPrivacyMode: boolean;
+  setIsPrivacyMode: (enabled: boolean) => void;
   currentDocumentId: string | null;
   setCurrentDocumentId: (id: string | null) => void;
   isLoading: boolean;
@@ -24,6 +26,7 @@ interface AppProviderProps {
  */
 export function AppProvider({ children }: AppProviderProps) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentGraphData, setCurrentGraphData] = useState<GraphData | null>(null);
@@ -48,6 +51,8 @@ export function AppProvider({ children }: AppProviderProps) {
   const value = {
     isOnline,
     setIsOnline,
+    isPrivacyMode,
+    setIsPrivacyMode,
     currentDocumentId,
     setCurrentDocumentId,
     isLoading,
